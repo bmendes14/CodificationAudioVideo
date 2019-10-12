@@ -1,7 +1,6 @@
 import argparse
 import wave
 import os.path
-from bitstring import BitStream
 
 parser = argparse.ArgumentParser()
 
@@ -9,15 +8,18 @@ parser.add_argument("input", help="set input file")
 parser.add_argument("output", help="set output file")
 
 args = parser.parse_args()
+# TODO: Make reduction factor a program parameter
 
-def quantitize_bit_sequence(data):
+def quantize_bit_sequence(data):
 	bit_sequence = ''
 	for i, byte in zip(range(0, len(data)), data):
 		print(str.format('\rProcessing... {:.2f}', i/len(data) * 100), end='')
 
 		nb = byte >> 2
+		# Remove '0b' from string
 		bin_repr = bin(nb)[2:]
 
+		# Make sure binary sequence representation is 6-bit length
 		if len(bin_repr) < 6:
 			for j in range(0, 6-len(bin_repr)):
 				bin_repr = '0' + bin_repr
@@ -25,21 +27,15 @@ def quantitize_bit_sequence(data):
 		elif len(bin_repr) > 6:
 			bin_repr = bin_repr[0:-2]
 
+		# Concatenate (probably should come up with a better way to concatenate)
 		bit_sequence += bin_repr
-		# print("Byte:\t\t", byte, "\tBin: \t", bin(byte)[2:])
-		# print("Shifted:\t", nb, "\tBin: \t", bin(nb)[2:])
-		# print("Bin: \t", bin_repr)
 
-		# string = string + bin(byte)[2:-2]
-		# print ("Number: ", bin(nb))
-		# print ("Number: ", bin(nb))
-		# print('\n', string)
-		# return
+	print('\n', bit_sequence[0:10])
 
-	print(bit_sequence[0:10])
-
-	bytes = int(bit_sequence, 2).to_bytes(len(bit_sequence) // 8, byteorder='big')
-	print(len(bytes))
+	# TODO: Why BigEndian?! WAVE Data is in little endian!
+	# Note: It does not work with byteorder=little, the output wave's data will not be correct
+	bytes = int(bit_sequence, 2).to_bytes((len(bit_sequence) + 7) // 8, byteorder='big')
+	return bytes
 
 def main():
 	# Input validation
@@ -67,6 +63,7 @@ def main():
 
 		bit_depth = int(bit_depth)
 		print("Input file:\t", args.input)
+		print("Output file:\t", args.output)
 		print("No Channels:\t", nchannels)
 		print("Sample Width:\t", sampwidth)
 		print("Framerate:\t", framerate)
@@ -75,38 +72,21 @@ def main():
 		print("Comp Name:\t", compname)
 		print("Bit-depth:\t", bit_depth)
 
-		# Open target file with same params (conversion of channel or similar would be here)
+		# Open target file with same params (this is just to write the header)
 		output_file = wave.open(args.output, 'wb')
 		output_file.setparams((nchannels, sampwidth, framerate, nframes, comptype, compname))
+		output_file.close()
 
-		new_file = ''
-		# with open(args.input, "rb") as f:
-		# 	fsize = os.fstat(f.fileno()).st_size
-		# 	byte = f.read(1)
-
-		string = ''
+		# Read whole file into buffer (TODO: change to chunk by chunk)
 		data = file.readframes(-1)
 
-		# Method 1
-		quantitize_bit_sequence(data)
+		# Quantize
+		reduced_data = quantize_bit_sequence(data)
 
-		return
-		# b = BitStream(bytes=byte)
-
-		# while bit_stream.bitpos <
-		# Took: 2.19min with read and manual bit_stream.pos + 8
-		# while bit_stream.pos < bit_stream.length:
-			# print(str.format('\rProcessing... {:.2f}', bit_stream.pos / bit_stream.length * 100), end='')
-			# Sample in binary
-			# sample_bin = bit_stream.read(bit_depth)
-			# bit_stream.pos = bit_stream.pos + 8
-			# new.append(sample_bin)
-
-		# Took 40s to read byte by byte
-		# counter = 1
-
-
-		# with open(args.output, 'wb') as output_file:
-		# 	new.tofile(output_file)
+		# Write actual data now
+		output_file = open(args.output, 'wb')
+		output_file.seek(44)
+		output_file.write(reduced_data)
+		output_file.close()
 
 main()
