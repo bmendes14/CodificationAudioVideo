@@ -3,22 +3,17 @@ import itertools
 import wave
 import os.path
 from bitstring import BitString, BitStream
+from prettytable import PrettyTable
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument("input", help="set input file")
-# parser.add_argument("output", help="set output file")
-
+parser.add_argument("--order", help="set the finite-context model order", required=True)
 args = parser.parse_args()
 
 
 # noinspection DuplicatedCode
 def main():
-    # Input validation
-    if not args.input:
-        print("Input file not set!")
-        return
-
     data = None
     # Open source file
     with wave.open(args.input, 'rb') as file:
@@ -42,12 +37,12 @@ def main():
 
         data = file.readframes(-1)
 
-    # bit_data = BitStream(bytes=data)
-    bit_data = BitStream(bin='001110001101010101011000001100')
+    bit_data = BitStream(bytes=data)
+    # bit_data = BitStream(bin='001110001101010101011000001100')
 
     # 1 - Generate possible permutations with defined order
     # Assume finite-context model of order 2
-    model_order = 2
+    model_order = int(args.order)
     bit_perm = ["".join(seq) for seq in itertools.product("01", repeat=model_order)]
 
     # Dictionary key is the binary sequence from the permutations set. The dict value is a list of two integers,
@@ -60,8 +55,8 @@ def main():
     # 00111000
     # Read until the position where a bit_sequence of the desired order fits and the following one
     # So: length - model_order
-    while bit_data.pos < bit_data.len-model_order:
-        print(str.format('\rPercentage: {:.1f}%', bit_data.pos*1.0/bit_data.len*100.0), end='')
+    while bit_data.pos < bit_data.len - model_order:
+        print(str.format('\rPercentage: {:.1f}%', bit_data.pos * 1.0 / bit_data.len * 100.0), end='')
         # Advance one bit in the sequence
         current_bit = bit_data.read('bin:1')
         bit_sequence = current_bit
@@ -72,21 +67,26 @@ def main():
         bit_sequence += lookahead_str[0:-1]
         bit_value = int(lookahead_str[-1])
 
-        context_dict[bit_sequence][bit_value] = context_dict[bit_sequence][bit_value]+1
+        context_dict[bit_sequence][bit_value] = context_dict[bit_sequence][bit_value] + 1
 
-    # Pretty print on table
-    # new line
-    print('')
-    for i in range(1, model_order+1):
-        print(str.format('n-{}\t', i), end='')
+    print("\nResults:")
 
-    print(str.format('C(0)\t'), end='')
-    print(str.format('C(1)\t'), end='')
+    x = PrettyTable()
 
-    print(str.format('P(0)\t'), end='')
-    print(str.format('P(1)\t'), end='')
+    x.field_names = [str.format('FCM {}-bit seq', model_order),
+                     'C(0)',
+                     'C(1)',
+                     'P(0)',
+                     'P(1)']
 
     for key, value in context_dict.items():
+        total = value[0] + value[1]
+        x.add_row([key,
+                  value[0],
+                  value[1],
+                  round(value[0] / total * 100, 2),
+                  round(value[1] / total * 100, 2)])
 
-        print (str.format('{}\t{}'))
+    print(x)
+
 main()
