@@ -80,7 +80,8 @@ def main():
 		# Read whole file into buffer (TODO: change to chunk by chunk)
 		data = file.readframes(-1)
 
-		# Quantize
+		# Quantize TODO: should also be refactored, since the memory footprint is huge
+		# For every bit, 8 bits are used to store it
 		reduced_data = quantize_bit_sequence(data)
 
 		# Write actual data now
