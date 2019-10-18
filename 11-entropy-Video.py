@@ -10,6 +10,8 @@ import sys
 from mimetypes import MimeTypes
 from urllib.parse import urlparse
 from urllib.request import pathname2url
+import math
+
 
 parser = argparse.ArgumentParser()
 
@@ -49,107 +51,74 @@ def videoInput(files):
     cap = cv2.VideoCapture(files)
     
     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    model_order = int(args.order)
-    bit_perm = ["".join(seq) for seq in itertools.product("01", repeat=model_order)]
-    
-    context_dict = dict()
-
-    for bp in bit_perm:
-        context_dict[bp] = [0, 0]
-
+    val = dict()
     frame_count = 0
     while(cap.isOpened()):    
         # Capture frame-by-frame 
         ret, frame = cap.read() 
         if ret == True:   
-            print(str.format('\rPercentage: {:.1f}%', frame_count * 1.0 / length * 100.0), end='\n')
-            context_dict  = calculateEntropy(frame,context_dict,model_order)
-            frame_count = frame_count + 1
+            print(str.format('\rPercentage: {:.1f}%', frame_count * 1.0 / length * 100.0), end='')
+            data = frame[:,:,0]
+            
+            for i in range(0,256):
+                val[(i)] = [0]*256
+
+            for x in range(0,data.shape[0]):
+                for y in range(0,data.shape[1]):
+                    if x-1 > 0:
+                        curr_pixel_value = data[x,y]
+                        prev_pixel_value = data[x-1,y]
+                        val[(prev_pixel_value)][curr_pixel_value] =val[(prev_pixel_value)][curr_pixel_value] + 1
         else:
             print(cap.read()[0])  
             break
+        frame_count = frame_count +1
 
     cap.release() 
-
-    # Get all information from all frames
-    #data = cap.read()[1]
-    #model_order,context_dict = calculateEntropy(data)
-    drawResults(model_order,context_dict)
+    calculateEntropy(val)
 
 def imageInput(files):
-    data = None
-    model_order = int(args.order)
-    bit_perm = ["".join(seq) for seq in itertools.product("01", repeat=model_order)]
     
-    context_dict = dict()
-
-    for bp in bit_perm:
-        context_dict[bp] = [0, 0]
-
     # Open source file
     data = cv2.imread(files)
-    context_dict  = calculateEntropy(data,context_dict,model_order)
-    drawResults(model_order,context_dict)
+    data = data[:,:,0]
+    val = dict()
+    for i in range(0,256):
+        val[(i)] = [0]*256
 
+    for x in range(0,data.shape[0]):
+        for y in range(0,data.shape[1]):
+            if x-1 > 0:
+                curr_pixel_value = data[x,y]
+                prev_pixel_value = data[x-1,y]
+                val[(prev_pixel_value)][curr_pixel_value] =val[(prev_pixel_value)][curr_pixel_value] + 1 
+    calculateEntropy(val)
+    
+
+    
 
 # noinspection DuplicatedCode
-def calculateEntropy(data, context_dict,model_order):
+def calculateEntropy(val):
+    
 
-    bit_data = BitStream(bytes=data)
-    #print(bit_data)
-    # bit_data = BitStream(bin='001110001101010101011000001100')
-
-    # 1 - Generate possible permutations with defined order
-    # Assume finite-context model of order 2
-    # model_order = int(args.order)
-    # bit_perm = ["".join(seq) for seq in itertools.product("01", repeat=model_order)]
-
-    # Dictionary key is the binary sequence from the permutations set. The dict value is a list of two integers,
-    # representing the number of times 0 or 1 was found after the respective binary sequence
-    # context_dict = dict()
-
-    # for bp in bit_perm:
-    #     context_dict[bp] = [0, 0]
-
-    # 00111000
-    # Read until the position where a bit_sequence of the desired order fits and the following one
-    # So: length - model_order
-    while bit_data.pos < bit_data.len - model_order:
-        print(str.format('\rPercentage2: {:.1f}%', bit_data.pos * 1.0 / bit_data.len * 100.0), end='')
-        # Advance one bit in the sequence
-        current_bit = bit_data.read('bin:1')
-        bit_sequence = current_bit
-
-        # Read model_order next bits. Note that we do not subtract one (one bit is read just before this) from model
-        # order because we also want the bit following the bit_sequence
-        lookahead_str = bit_data.peek('bin:' + str(model_order))
-        bit_sequence += lookahead_str[0:-1]
-        bit_value = int(lookahead_str[-1])
-
-        context_dict[bit_sequence][bit_value] = context_dict[bit_sequence][bit_value] + 1
-
-    return context_dict
+    Htropia = [0]*256
+    count = 0
+    for k,v in val.items():
+        p = [0]*256
+        total = sum(v)
+        for i in range(0,len(v)):
+            p[i] = p[i] + v[i]/total
+        H=0
+        for i in range(0,len(p)):
+            if(p[i]>0.0):
+                H = H + p[i] * math.log2(p[i])
+        Htropia[k] = -1 * H
+        count = count +1
+    x = [i for i in range(0,len(Htropia))]
+    y = [Htropia[i] for i in range(0,len(Htropia))]
+    plt.plot(x, y)
+    plt.show()
 
 
-def drawResults(model_order,context_dict):
-    print("\nResults:")
-
-    x = PrettyTable()
-
-    x.field_names = [str.format('FCM {}-bit seq', model_order),
-                     'C(0)',
-                     'C(1)',
-                     'P(0)',
-                     'P(1)']
-
-    for key, value in context_dict.items():
-        total = value[0] + value[1]
-        x.add_row([key,
-                  value[0],
-                  value[1],
-                  round(value[0] / total * 100, 2),
-                  round(value[1] / total * 100, 2)])
-
-    print(x)
 
 main(sys.argv[1])
